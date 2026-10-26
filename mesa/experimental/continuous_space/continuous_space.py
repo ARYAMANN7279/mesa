@@ -217,7 +217,12 @@ class ContinuousSpace[A: ContinuousSpaceAgent]:
         return delta
 
     def calculate_distances(
-        self, point: ArrayLike, agents: Iterable[Agent] | None = None, **kwargs
+        self,
+        point: ArrayLike,
+        agents: Iterable[Agent] | None = None,
+        *,
+        _in_bounds: bool = False,
+        **kwargs,
     ) -> tuple[np.ndarray, list]:
         """Calculate the distance between the point and all agents.
 
@@ -225,6 +230,8 @@ class ContinuousSpace[A: ContinuousSpaceAgent]:
             point: the point to calculate the difference vector for
             agents: the agents to calculate the difference vector of point with. By default,
                     all agents are considered.
+            _in_bounds: internal, True if the point is known to be inside the space, which
+                    skips the bounds check on a torus. Agents use it with their own position.
             kwargs: any additional keyword arguments are passed to scipy's cdist, which is used
                     only if torus is False. This allows for non-Euclidian distance measures.
 
@@ -247,7 +254,8 @@ class ContinuousSpace[A: ContinuousSpaceAgent]:
             # The minimum image convention below only holds while the separation
             # is at most the space size on each axis, which an out-of-bounds
             # query point can break, so wrap the point into the bounds first.
-            point = self._wrap_point(point)
+            if not _in_bounds:
+                point = self._wrap_point(point)
 
             delta = np.abs(point - positions)
             delta = np.minimum(delta, self.size - delta, out=delta)
@@ -262,10 +270,10 @@ class ContinuousSpace[A: ContinuousSpaceAgent]:
         return dists, agents
 
     def get_agents_in_radius(
-        self, point: ArrayLike, radius: float | int = 1
+        self, point: ArrayLike, radius: float | int = 1, *, _in_bounds: bool = False
     ) -> tuple[list, np.ndarray]:
         """Return the agents and their distances within a radius for the point."""
-        distances, agents = self.calculate_distances(point)
+        distances, agents = self.calculate_distances(point, _in_bounds=_in_bounds)
         logical = distances <= radius
         agents = list(compress(agents, logical))
         return (
@@ -274,7 +282,7 @@ class ContinuousSpace[A: ContinuousSpaceAgent]:
         )
 
     def get_k_nearest_agents(
-        self, point: ArrayLike, k: int = 1
+        self, point: ArrayLike, k: int = 1, *, _in_bounds: bool = False
     ) -> tuple[list, np.ndarray]:
         """Return the k nearest agents and their distances to the point.
 
@@ -288,7 +296,7 @@ class ContinuousSpace[A: ContinuousSpaceAgent]:
             without a warning.
 
         """
-        dists, agents = self.calculate_distances(point)
+        dists, agents = self.calculate_distances(point, _in_bounds=_in_bounds)
         n = len(dists)
         # Handle empty space or invalid k
         if n == 0 or k <= 0:

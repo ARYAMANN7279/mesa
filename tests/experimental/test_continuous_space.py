@@ -1,5 +1,7 @@
 """Tests for continuous space."""
 
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 
@@ -266,6 +268,32 @@ def test_continuous_space_torus_out_of_bounds_query():
         vector = space.calculate_difference_vector(point)
         assert np.allclose(vector, [0.2, 0.0]), point
         assert np.all(np.abs(vector) <= space.size / 2), point
+
+
+def test_continuous_space_torus_agent_queries_skip_bounds_check():
+    """Agents query with their own position, which is always inside the space.
+
+    The bounds check is skipped for those queries, but not for other queries.
+    """
+    model = Model(rng=42)
+    space = ContinuousSpace([[0, 1], [0, 1]], torus=True, random=model.random)
+    agent = ContinuousSpaceAgent(space, model)
+    agent.position = [0.1, 0.1]
+    other = ContinuousSpaceAgent(space, model)
+    other.position = [0.9, 0.1]
+
+    with patch.object(space, "_wrap_point", wraps=space._wrap_point) as wrap_point:
+        agents, distances = agent.get_neighbors_in_radius(radius=0.5)
+        assert agents == [other]
+        assert np.allclose(distances, [0.2])
+        agents, distances = agent.get_nearest_neighbors(k=1)
+        assert agents == [other]
+        assert np.allclose(distances, [0.2])
+        wrap_point.assert_not_called()
+
+        space.get_agents_in_radius([0.1, 0.1], radius=0.5)
+        space.get_k_nearest_agents([0.1, 0.1], k=1)
+        assert wrap_point.call_count == 2
 
 
 def test_continous_space_difference_vector():
